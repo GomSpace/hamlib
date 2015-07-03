@@ -279,6 +279,16 @@
 #define ROT_BACKEND_ETHER6 "ether6"
 #define ROT_MODEL_ETHER6 ROT_MAKE_MODEL(ROT_ETHER6, 1)
 
+/*! \def ROT_MODEL_PROSISTEL
+ *  \brief A macro that returns the model number of the prosistel backend.
+ *
+ *  The prosistel backend can be used with rotators that support the prosistel
+ *  protocol and alike.
+ */
+#define ROT_PROSISTEL 16
+#define ROT_BACKEND_PROSISTEL "prosistel"
+#define ROT_MODEL_PROSISTEL ROT_MAKE_MODEL(ROT_PROSISTEL, 1)
+
 /*! \typedef typedef int rot_model_t
     \brief Convenience type definition for rotator model.
 */

@@ -1,7 +1,6 @@
 /*
- *  Hamlib Rotator backend - GS-232B
+ *  Hamlib Rotator backend - GS-232A
  *  Copyright (c) 2001-2012 by Stephane Fillod
- *                 (c) 2010 by Kobus Botha
  *
  *
  *   This library is free software; you can redistribute it and/or
@@ -35,15 +34,13 @@
 #include "misc.h"
 #include "register.h"
 
-#include "gs232a.h"
-
 #define EOM "\r"
 #define REPLY_EOM "\r\n"
 
 #define BUFSZ 64
 
 /**
- * gs232b_transaction
+ * gs232a_transaction
  *
  * cmdstr - Command to be sent to the rig.
  * data - Buffer for reply string.  Can be NULL, indicating that no reply is
@@ -59,7 +56,7 @@
  *                    recognized by rig.
  */
 static int
-gs232b_transaction (ROT *rot, const char *cmdstr,
+prosistel_transaction (ROT *rot, const char *cmdstr,
 				char *data, size_t data_len)
 {
     struct rot_state *rs;
@@ -95,7 +92,6 @@ transaction_write:
 
 #if 0
     /* Check that command termination is correct */
-
     if (strchr(REPLY_EOM, data[strlen(data)-1])==NULL) {
         rig_debug(RIG_DEBUG_ERR, "%s: Command is not correctly terminated '%s'\n", __FUNCTION__, data);
         if (retry_read++ < rig->state.rotport.retry)
@@ -104,7 +100,6 @@ transaction_write:
         goto transaction_quit;
     }
 #endif
-
 
     if (data[0] == '?') {
 	    /* Invalid command */
@@ -121,7 +116,7 @@ transaction_quit:
 
 
 static int
-gs232b_rot_set_position(ROT *rot, azimuth_t az, elevation_t el)
+prosistel_rot_set_position(ROT *rot, azimuth_t az, elevation_t el)
 {
     char cmdstr[64];
     int retval;
@@ -129,50 +124,55 @@ gs232b_rot_set_position(ROT *rot, azimuth_t az, elevation_t el)
 
     rig_debug(RIG_DEBUG_TRACE, "%s called: %f %f\n", __FUNCTION__, az, el);
 
-    u_az = (unsigned)rint(az);
-    u_el = (unsigned)rint(el);
+    u_az = (unsigned)rint(az * 10);
+    u_el = (unsigned)rint(el * 10);
 
-    sprintf(cmdstr, "W%03u %03u" EOM, u_az, u_el);
-    retval = gs232b_transaction(rot, cmdstr, NULL, 0);
-
-    if (retval != RIG_OK) {
+    sprintf(cmdstr, "\x02""AG%04u\r", u_az);
+    retval = prosistel_transaction(rot, cmdstr, NULL, 0);
+    if (retval != RIG_OK)
         return retval;
-    }
+
+    sprintf(cmdstr, "\x02""BG%04u\r", u_el);
+    retval = prosistel_transaction(rot, cmdstr, NULL, 0);
+    if (retval != RIG_OK)
+        return retval;
 
     return RIG_OK;
 }
 
 static int
-gs232b_rot_get_position(ROT *rot, azimuth_t *az, elevation_t *el)
+prosistel_rot_get_position(ROT *rot, azimuth_t *az, elevation_t *el)
 {
     char posbuf[32];
-    int retval, int_az, int_el;
+    int retval, angle;
 
     rig_debug(RIG_DEBUG_TRACE, "%s called\n", __FUNCTION__);
 
-    char test[10] = "xA?\r";
-    test[0] = 2;
-
-    retval = gs232b_transaction(rot, test, posbuf, sizeof(posbuf));
-
-    printf("test %s \r\n", test);
-    printf("test %s \r\n", posbuf);
-
+	/* Get azimuth */
+	char getpos_a_command[] = "\x02""A?\r";
+    retval = prosistel_transaction(rot, getpos_a_command, posbuf, sizeof(posbuf));
     if (retval != RIG_OK || strlen(posbuf) < 10) {
         return retval < 0 ? retval : -RIG_EPROTO;
     }
 
-    /* parse "AZ=aaa   EL=eee" */
-
-    /* With the format string containing a space character as one of the
-     * directives, any amount of space is matched, including none in the input.
-     */
-    if (sscanf(posbuf, "AZ=%d EL=%d", &int_az, &int_el) != 2) {
+    if (sscanf(posbuf+5, "%d", &angle) != 1) {
         rig_debug(RIG_DEBUG_ERR, "%s: wrong reply '%s'\n", __FUNCTION__, posbuf);
         return -RIG_EPROTO;
     }
-    *az = (azimuth_t)int_az;
-    *el = (elevation_t)int_el;
+    *az = (azimuth_t)angle / 10;
+
+    /* Get elevation */
+    char getpos_b_command[] = "\x02""B?\r";
+	retval = prosistel_transaction(rot, getpos_b_command, posbuf, sizeof(posbuf));
+	if (retval != RIG_OK || strlen(posbuf) < 10) {
+		return retval < 0 ? retval : -RIG_EPROTO;
+	}
+
+	if (sscanf(posbuf+7, "%d", &angle) != 1) {
+        rig_debug(RIG_DEBUG_ERR, "%s: wrong reply '%s'\n", __FUNCTION__, posbuf);
+        return -RIG_EPROTO;
+    }
+    *el = (elevation_t)angle / 10;
 
     rig_debug(RIG_DEBUG_TRACE, "%s: (az, el) = (%.1f, %.1f)\n",
 		   __FUNCTION__, *az, *el);
@@ -181,80 +181,65 @@ gs232b_rot_get_position(ROT *rot, azimuth_t *az, elevation_t *el)
 }
 
 static int
-gs232b_rot_stop(ROT *rot)
+prosistel_rot_stop(ROT *rot)
 {
-    int retval;
-
     rig_debug(RIG_DEBUG_TRACE, "%s called\n", __FUNCTION__);
 
     /* All Stop */
-    retval = gs232b_transaction(rot, "S" EOM, NULL, 0);
-    if (retval != RIG_OK)
-        return retval;
+    prosistel_transaction(rot, "\x02""AG9999\r", NULL, 0);
+    prosistel_transaction(rot, "\x02""BG9999\r", NULL, 0);
 
     return RIG_OK;
 }
-
 
 static int
-gs232b_rot_move(ROT *rot, int direction, int speed)
+prosistel_rot_open(ROT *rot)
 {
-    char cmdstr[24];
     int retval;
-    unsigned x_speed;
 
-    rig_debug(RIG_DEBUG_TRACE, "%s called %d %d\n", __FUNCTION__,
-		    direction, speed);
+	rig_debug(RIG_DEBUG_TRACE, "%s called\n", __FUNCTION__);
 
-    x_speed = (3*speed)/100 + 1;
+	char databuf[1000];
 
-    /* between 1 (slowest) and 4 (fastest) */
-    sprintf(cmdstr, "X%u" EOM, x_speed);
-    retval = gs232b_transaction(rot, cmdstr, NULL, 0);
-    if (retval != RIG_OK)
-        return retval;
+    prosistel_transaction(rot, "\x02""AL\r", databuf, 1000);
+    usleep(100000);
+    prosistel_transaction(rot, "\x02""BL\r", databuf, 1000);
 
-    switch (direction) {
-    case ROT_MOVE_UP:       /* Elevation increase */
-        sprintf(cmdstr, "U" EOM);
-        break;
-    case ROT_MOVE_DOWN:     /* Elevation decrease */
-        sprintf(cmdstr, "D" EOM);
-        break;
-    case ROT_MOVE_LEFT:     /* Azimuth decrease */
-        sprintf(cmdstr, "L" EOM);
-        break;
-    case ROT_MOVE_RIGHT:    /* Azimuth increase */
-        sprintf(cmdstr, "R" EOM);
-        break;
-    default:
-        rig_debug(RIG_DEBUG_ERR,"%s: Invalid direction value! (%d)\n",
-			__FUNCTION__, direction);
-        return -RIG_EINVAL;
-    }
+    /* Send STOP */
+#if 1
+    retval = prosistel_transaction(rot, "\x02""AS\r", databuf, 1000);
+	if (retval != RIG_OK) {
+		return retval < 0 ? retval : -RIG_EPROTO;
+	}
+	retval = prosistel_transaction(rot, "\x02""BS\r", databuf, 1000);
+	if (retval != RIG_OK) {
+		return retval < 0 ? retval : -RIG_EPROTO;
+	}
+#endif
 
-    retval = gs232b_transaction(rot, cmdstr, NULL, 0);
-    if (retval != RIG_OK)
-        return retval;
+	/* Update EEPROM parameters */
+	//char type = 'L';
+	//char lowlim =
 
     return RIG_OK;
 }
+
 
 /* ************************************************************************* */
 /*
- * Generic GS232B rotator capabilities.
+ * Generic rotator capabilities.
  */
 
-const struct rot_caps gs232b_rot_caps = {
-  .rot_model =      ROT_MODEL_GS232B,
-  .model_name =     "GS-232B",
-  .mfg_name =       "Yaesu",
-  .version =        "0.2",
+const struct rot_caps prosistel_rot_caps = {
+  .rot_model =      ROT_MODEL_PROSISTEL,
+  .model_name =     "Combo Desk Top",
+  .mfg_name =       "Pro.Sis.Tel",
+  .version =        "0.1",
   .copyright = 	    "LGPL",
   .status =         RIG_STATUS_BETA,
-  .rot_type =       ROT_TYPE_OTHER,
+  .rot_type =       ROT_TYPE_AZEL,
   .port_type =      RIG_PORT_SERIAL,
-  .serial_rate_min =   150,
+  .serial_rate_min =   9600,
   .serial_rate_max =   9600,
   .serial_data_bits =  8,
   .serial_stop_bits =  1,
@@ -266,15 +251,28 @@ const struct rot_caps gs232b_rot_caps = {
   .retry =  3,
 
   .min_az = 	0.0,
-  .max_az =  	450.0,	/* vary according to rotator type */
+  .max_az =  	450.0,
   .min_el = 	0.0,
-  .max_el =  	180.0, /* requires G-5400B, G-5600B, G-5500, or G-500/G-550 */
+  .max_el =  	90.0,
 
-  .get_position =  gs232b_rot_get_position,
-  .set_position =  gs232b_rot_set_position,
-  .stop = 	       gs232b_rot_stop,
-  .move =          gs232b_rot_move,
+  .get_position =  prosistel_rot_get_position,
+  .set_position =  prosistel_rot_set_position,
+  .stop = 	       prosistel_rot_stop,
+  .rot_open =      prosistel_rot_open,
 };
 
+
+/* ************************************************************************* */
+
+DECLARE_INITROT_BACKEND(prosistel)
+{
+	rig_debug(RIG_DEBUG_VERBOSE, "%s called\n", __FUNCTION__);
+
+    rot_register(&prosistel_rot_caps);
+
+	return RIG_OK;
+}
+
+/* ************************************************************************* */
 /* end of file */
 
