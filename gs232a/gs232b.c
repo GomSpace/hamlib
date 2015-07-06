@@ -150,14 +150,7 @@ gs232b_rot_get_position(ROT *rot, azimuth_t *az, elevation_t *el)
 
     rig_debug(RIG_DEBUG_TRACE, "%s called\n", __FUNCTION__);
 
-    char test[10] = "xA?\r";
-    test[0] = 2;
-
-    retval = gs232b_transaction(rot, test, posbuf, sizeof(posbuf));
-
-    printf("test %s \r\n", test);
-    printf("test %s \r\n", posbuf);
-
+    retval = gs232b_transaction(rot, "C2" EOM, posbuf, sizeof(posbuf));
     if (retval != RIG_OK || strlen(posbuf) < 10) {
         return retval < 0 ? retval : -RIG_EPROTO;
     }
