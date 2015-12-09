@@ -251,9 +251,9 @@ const struct rot_caps prosistel_rot_caps = {
   .retry =  3,
 
   .min_az = 	0.0,
-  .max_az =  	450.0,
+  .max_az =  	360.0,
   .min_el = 	0.0,
-  .max_el =  	90.0,
+  .max_el =  	180.0,
 
   .get_position =  prosistel_rot_get_position,
   .set_position =  prosistel_rot_set_position,
