@@ -157,9 +157,8 @@ prosistel_rot_get_position(ROT *rot, azimuth_t *az, elevation_t *el)
 
     /* Find second comma */
     char * pos;
-    pos = strstr(posbuf, ",");
-    pos = strstr(pos, ",");
-
+    pos = strstr(posbuf, ",") + 1;
+    pos = strstr(pos, ",") + 1;
     if (sscanf(pos, "%d", &angle) != 1) {
         rig_debug(RIG_DEBUG_ERR, "%s: wrong reply '%s'\n", __FUNCTION__, posbuf);
         return -RIG_EPROTO;
@@ -173,7 +172,10 @@ prosistel_rot_get_position(ROT *rot, azimuth_t *az, elevation_t *el)
 		return retval < 0 ? retval : -RIG_EPROTO;
 	}
 
-	if (sscanf(posbuf+5, "%d", &angle) != 1) {
+	/* Find second comma */
+    pos = strstr(posbuf, ",") + 1;
+    pos = strstr(pos, ",") + 1;
+	if (sscanf(pos, "%d", &angle) != 1) {
         rig_debug(RIG_DEBUG_ERR, "%s: wrong reply '%s'\n", __FUNCTION__, posbuf);
         return -RIG_EPROTO;
     }
